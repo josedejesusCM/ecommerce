@@ -16,6 +16,7 @@ import com.jjcm.ecommerce.api.repository.CustomerRepository;
 import com.jjcm.ecommerce.api.repository.OrderRepository;
 import com.jjcm.ecommerce.api.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +27,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class OrderService {
+
+    private static final int LOW_STOCK_THRESHOLD = 10;
 
     /** One-way status transitions. Statuses absent from this map (DELIVERED, CANCELLED, REFUNDED) are final. */
     private static final Map<OrderStatus, Set<OrderStatus>> ALLOWED_TRANSITIONS = Map.of(
@@ -82,6 +86,13 @@ public class OrderService {
                     .unitPrice(product.getPrice())
                     .build());
             total = total.add(product.getPrice().multiply(BigDecimal.valueOf(quantity)));
+        }
+
+        for (OrderItem item : order.getItems()) {
+            Product product = item.getProduct();
+            if (product.getStockQuantity() < LOW_STOCK_THRESHOLD) {
+                log.warn("Low stock alert: {} has {} units left", product.getName(), product.getStockQuantity());
+            }
         }
 
         order.setTotalAmount(total);

@@ -16,7 +16,14 @@ import com.jjcm.ecommerce.api.exception.ResourceNotFoundException;
 import com.jjcm.ecommerce.api.repository.CustomerRepository;
 import com.jjcm.ecommerce.api.repository.OrderRepository;
 import com.jjcm.ecommerce.api.repository.ProductRepository;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.function.Executable;
 import org.mockito.InjectMocks;
@@ -27,6 +34,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,6 +55,20 @@ class OrderServiceTest {
     @InjectMocks
     private OrderService orderService;
 
+    private ListAppender<ILoggingEvent> logAppender;
+
+    @BeforeEach
+    void attachLogAppender() {
+        logAppender = new ListAppender<>();
+        logAppender.start();
+        ((Logger) LoggerFactory.getLogger(OrderService.class)).addAppender(logAppender);
+    }
+
+    @AfterEach
+    void detachLogAppender() {
+        ((Logger) LoggerFactory.getLogger(OrderService.class)).detachAppender(logAppender);
+    }
+
     private Customer customer() {
         return Customer.builder().id(1L).firstName("John").lastName("Doe").email("john.doe@example.com").build();
     }
@@ -54,6 +76,7 @@ class OrderServiceTest {
     private Product product(int stock) {
         return Product.builder()
                 .id(1L)
+                .name("Wireless Mouse")
                 .sku("ELEC-MOU-001")
                 .price(new BigDecimal("24.99"))
                 .stockQuantity(stock)
@@ -177,5 +200,62 @@ class OrderServiceTest {
 
         // Assert
         assertEquals(PaymentStatus.REFUNDED, result.getPayment().getPaymentStatus());
+    }
+
+    @Test
+    void should_logLowStockWarning_when_remainingStockBelowThreshold() {
+        // Arrange
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product(10)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        orderService.create(placeOrderRequest(1L, 1));
+
+        // Assert
+        assertEquals("Low stock alert: Wireless Mouse has 9 units left",
+                logAppender.list.get(0).getFormattedMessage());
+    }
+
+    @Test
+    void should_logWarningAtWarnLevel_when_remainingStockBelowThreshold() {
+        // Arrange
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product(10)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        orderService.create(placeOrderRequest(1L, 1));
+
+        // Assert
+        assertEquals(Level.WARN, logAppender.list.get(0).getLevel());
+    }
+
+    @Test
+    void should_notLogWarning_when_remainingStockEqualsThreshold() {
+        // Arrange
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product(13)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        orderService.create(placeOrderRequest(1L, 3));
+
+        // Assert
+        assertEquals(0, logAppender.list.size());
+    }
+
+    @Test
+    void should_completeOrderWithoutException_when_remainingStockBelowThreshold() {
+        // Arrange
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product(10)));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        Executable action = () -> orderService.create(placeOrderRequest(1L, 1));
+
+        // Assert
+        assertDoesNotThrow(action);
     }
 }
