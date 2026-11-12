@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: build the executable jar with the Temurin 21 JDK
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:26-jdk AS build
+FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
 # Resolve dependencies first so this layer is cached until pom.xml changes.
