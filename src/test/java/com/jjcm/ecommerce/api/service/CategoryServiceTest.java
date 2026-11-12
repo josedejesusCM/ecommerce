@@ -15,11 +15,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -97,5 +100,104 @@ class CategoryServiceTest {
 
         // Assert
         assertThrows(ResourceNotFoundException.class, action);
+    }
+
+    @Test
+    void should_returnAllCategories_when_listRequested() {
+        // Arrange
+        Category category = Category.builder().id(1L).name("Books").slug("books").build();
+        when(categoryRepository.findAll()).thenReturn(List.of(category));
+
+        // Act
+        List<CategoryResponse> result = categoryService.findAll();
+
+        // Assert
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void should_returnCategory_when_categoryExists() {
+        // Arrange
+        Category category = Category.builder().id(1L).name("Books").slug("books").build();
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+
+        // Act
+        CategoryResponse result = categoryService.findById(1L);
+
+        // Assert
+        assertEquals("Books", result.getName());
+    }
+
+    @Test
+    void should_updateFields_when_nameAndSlugAreFree() {
+        // Arrange
+        Category category = Category.builder().id(1L).name("Old").slug("old").build();
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(categoryRepository.findByNameIgnoreCase("Books")).thenReturn(Optional.empty());
+        when(categoryRepository.findBySlug("books")).thenReturn(Optional.empty());
+
+        // Act
+        CategoryResponse result = categoryService.update(1L, request());
+
+        // Assert
+        assertEquals("books", result.getSlug());
+    }
+
+    @Test
+    void should_notThrow_when_updatingCategoryWithItsOwnNameAndSlug() {
+        // Arrange
+        Category category = Category.builder().id(1L).name("Books").slug("books").build();
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(categoryRepository.findByNameIgnoreCase("Books")).thenReturn(Optional.of(category));
+        when(categoryRepository.findBySlug("books")).thenReturn(Optional.of(category));
+
+        // Act
+        Executable action = () -> categoryService.update(1L, request());
+
+        // Assert
+        assertDoesNotThrow(action);
+    }
+
+    @Test
+    void should_throwDuplicateResourceException_when_updatedNameBelongsToAnotherCategory() {
+        // Arrange
+        Category category = Category.builder().id(1L).name("Old").slug("old").build();
+        Category other = Category.builder().id(2L).name("Books").slug("books-2").build();
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(categoryRepository.findByNameIgnoreCase("Books")).thenReturn(Optional.of(other));
+
+        // Act
+        Executable action = () -> categoryService.update(1L, request());
+
+        // Assert
+        assertThrows(DuplicateResourceException.class, action);
+    }
+
+    @Test
+    void should_throwDuplicateResourceException_when_createdSlugBelongsToAnotherCategory() {
+        // Arrange
+        Category other = Category.builder().id(2L).name("Other").slug("books").build();
+        when(categoryRepository.findByNameIgnoreCase("Books")).thenReturn(Optional.empty());
+        when(categoryRepository.findBySlug("books")).thenReturn(Optional.of(other));
+
+        // Act
+        Executable action = () -> categoryService.create(request());
+
+        // Assert
+        assertThrows(DuplicateResourceException.class, action);
+    }
+
+    @Test
+    void should_deleteCategory_when_noProductsReferenceIt() {
+        // Arrange
+        Category category = Category.builder().id(1L).name("Books").slug("books").build();
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(productRepository.existsByCategoryId(1L)).thenReturn(false);
+
+        // Act
+        categoryService.delete(1L);
+
+        // Assert
+        verify(categoryRepository).delete(category);
     }
 }

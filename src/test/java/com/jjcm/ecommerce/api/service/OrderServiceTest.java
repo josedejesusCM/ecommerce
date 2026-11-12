@@ -258,4 +258,147 @@ class OrderServiceTest {
         // Assert
         assertDoesNotThrow(action);
     }
+
+    @Test
+    void should_throwBusinessRuleException_when_transitionNotAllowed() {
+        // Arrange
+        Order pending = existingOrder(OrderStatus.PENDING, product(7), 3, PaymentStatus.PENDING);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(pending));
+
+        // Act
+        Executable action = () -> orderService.updateStatus(1L, OrderStatus.SHIPPED);
+
+        // Assert
+        assertThrows(BusinessRuleException.class, action);
+    }
+
+    @Test
+    void should_leavePaymentUnchanged_when_cancellingOrderWithUncompletedPayment() {
+        // Arrange
+        Order processing = existingOrder(OrderStatus.PROCESSING, product(7), 3, PaymentStatus.PENDING);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(processing));
+
+        // Act
+        OrderResponse result = orderService.updateStatus(1L, OrderStatus.CANCELLED);
+
+        // Assert
+        assertEquals(PaymentStatus.PENDING, result.getPayment().getPaymentStatus());
+    }
+
+    @Test
+    void should_returnOnlyMatchingStatus_when_filteringByCustomerAndStatus() {
+        // Arrange
+        Order pending = existingOrder(OrderStatus.PENDING, product(7), 1, PaymentStatus.PENDING);
+        Order confirmed = existingOrder(OrderStatus.CONFIRMED, product(7), 1, PaymentStatus.PENDING);
+        when(orderRepository.findByCustomerIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(pending, confirmed));
+
+        // Act
+        List<OrderResponse> result = orderService.findAll(1L, OrderStatus.PENDING);
+
+        // Assert
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void should_returnAllOrders_when_noFiltersGiven() {
+        // Arrange
+        Order pending = existingOrder(OrderStatus.PENDING, product(7), 1, PaymentStatus.PENDING);
+        Order confirmed = existingOrder(OrderStatus.CONFIRMED, product(7), 1, PaymentStatus.PENDING);
+        when(orderRepository.findAll()).thenReturn(List.of(pending, confirmed));
+
+        // Act
+        List<OrderResponse> result = orderService.findAll(null, null);
+
+        // Assert
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    void should_returnOrder_when_orderExists() {
+        // Arrange
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(
+                existingOrder(OrderStatus.PENDING, product(7), 1, PaymentStatus.PENDING)));
+
+        // Act
+        OrderResponse result = orderService.findById(1L);
+
+        // Assert
+        assertEquals(OrderStatus.PENDING, result.getStatus());
+    }
+
+    @Test
+    void should_setPaymentStatus_when_orderNotCancelled() {
+        // Arrange
+        Order processing = existingOrder(OrderStatus.PROCESSING, product(7), 1, PaymentStatus.PENDING);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(processing));
+
+        // Act
+        OrderResponse result = orderService.updatePaymentStatus(1L, PaymentStatus.COMPLETED);
+
+        // Assert
+        assertEquals(PaymentStatus.COMPLETED, result.getPayment().getPaymentStatus());
+    }
+
+    @Test
+    void should_throwBusinessRuleException_when_changingPaymentOfCancelledOrder() {
+        // Arrange
+        Order cancelled = existingOrder(OrderStatus.CANCELLED, product(7), 1, PaymentStatus.PENDING);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(cancelled));
+
+        // Act
+        Executable action = () -> orderService.updatePaymentStatus(1L, PaymentStatus.COMPLETED);
+
+        // Assert
+        assertThrows(BusinessRuleException.class, action);
+    }
+
+    @Test
+    void should_throwBusinessRuleException_when_sameProductAppearsTwice() {
+        // Arrange
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product(10)));
+        OrderCreateRequest request = OrderCreateRequest.builder()
+                .customerId(1L)
+                .shippingAddress("123 Maple Street, Springfield")
+                .paymentMethod(PaymentMethod.CREDIT_CARD)
+                .items(List.of(
+                        OrderItemRequest.builder().productId(1L).quantity(1).build(),
+                        OrderItemRequest.builder().productId(1L).quantity(2).build()))
+                .build();
+
+        // Act
+        Executable action = () -> orderService.create(request);
+
+        // Assert
+        assertThrows(BusinessRuleException.class, action);
+    }
+
+    @Test
+    void should_throwBusinessRuleException_when_productIsInactive() {
+        // Arrange
+        Product inactive = Product.builder()
+                .id(1L).name("Wireless Mouse").sku("ELEC-MOU-001")
+                .price(new BigDecimal("24.99")).stockQuantity(10).active(false).build();
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(inactive));
+
+        // Act
+        Executable action = () -> orderService.create(placeOrderRequest(1L, 1));
+
+        // Assert
+        assertThrows(BusinessRuleException.class, action);
+    }
+
+    @Test
+    void should_throwResourceNotFoundException_when_orderItemProductDoesNotExist() {
+        // Arrange
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(customer()));
+        when(productRepository.findById(1L)).thenReturn(Optional.empty());
+
+        // Act
+        Executable action = () -> orderService.create(placeOrderRequest(1L, 1));
+
+        // Assert
+        assertThrows(ResourceNotFoundException.class, action);
+    }
 }
