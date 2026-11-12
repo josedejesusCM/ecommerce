@@ -1,3 +1,8 @@
+---
+paths:
+  - "src/main/java/**/controller/**"
+---
+
 # API Design Rules
 - All endpoints: `/api/v1/resource`.
 

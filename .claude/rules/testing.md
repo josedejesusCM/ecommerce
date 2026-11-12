@@ -1,3 +1,8 @@
+---
+paths:
+  - "src/test/**"
+---
+
 # Testing Rules
 - Test class naming: `[ClassName]Test.java`.
 - Use `@ExtendWith(MockitoExtension.class)` for unit tests.

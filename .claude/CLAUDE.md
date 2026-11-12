@@ -1,23 +1,5 @@
 # ecommerce-api
 
-## Stack
-- Java 21
-- Spring Boot 4.1.0
-- Maven
-- PostgreSQL
-
-## Package Structure
-Base package: `com.jjcm.ecommerce`
-
-Sub-packages:
-- `controller`
-- `service`
-- `repository`
-- `entity`
-- `dto`
-- `exception`
-- `config`
-
 ## Architecture Rules
 - Always use DTOs in controllers — never expose entities directly.
 - All business logic lives in the service layer — keep controllers thin.
@@ -42,8 +24,3 @@ All handled in `GlobalExceptionHandler`, returning `ErrorResponse` JSON:
 ## Database
 - PostgreSQL, database `ecommerce_db`.
 - `ddl-auto=validate` — tables come from `schema.sql`, not Hibernate.
-
-## Commands
-- Run: `./mvnw spring-boot:run`
-- Test: `./mvnw test`
-- Compile check: `./mvnw clean compile`
