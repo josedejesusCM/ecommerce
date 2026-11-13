@@ -1,0 +1,53 @@
+# Local stack: ecommerce-api + PostgreSQL 18.
+# Secrets and database name come from .env (see .env.example).
+#   docker compose up -d --build
+#   PostgreSQL on the host: localhost:5433   API: http://localhost:8080
+
+name: ecommerce
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Bootstrap through the maintenance database. db/schema.sql drops and
+      # creates ecommerce_db itself, which it cannot do while connected to it.
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      # PostgreSQL 18 image stores data under /var/lib/postgresql (not .../data).
+      - pgdata:/var/lib/postgresql
+      # Runs once, on first start with an empty data volume.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      # -h localhost forces TCP. During first-start init the server only listens
+      # on the Unix socket, so this stays unhealthy until schema.sql has finished.
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U $$POSTGRES_USER"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ecommerce-api:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Overrides spring.datasource.* in application.properties, which points at
+      # localhost:5433 for running the app directly on the host.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

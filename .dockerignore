@@ -1,0 +1,19 @@
+# Build output and IDE/VCS metadata are rebuilt inside the image
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+*.log
+
+# Local Claude Code state and nested worktrees (not needed in the image)
+.claude/
+**/.claude/worktrees/
+
+# Local secrets and environment files must never enter the image
+.env
+.env.*
+application-local.properties
+application-*-local.properties
+application-local.yml
+application-*-local.yml
