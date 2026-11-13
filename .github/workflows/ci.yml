@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read
@@ -64,9 +64,9 @@ jobs:
     name: Build and push image
     runs-on: ubuntu-latest
     needs: test
-    # The image is built on every push to main so a broken Dockerfile is
-    # caught, but it is only pushed to GHCR from main.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The image is built on every push to master so a broken Dockerfile is
+    # caught, but it is only pushed to GHCR from master.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
